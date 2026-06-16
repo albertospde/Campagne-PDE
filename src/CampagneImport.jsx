@@ -16,19 +16,21 @@ const css = {
   td: { padding: "7px 12px", borderBottom: `1px solid ${T.border}22`, verticalAlign: "middle", fontSize: "12px" },
 };
 
-// Colonne del template cedola campagna (stesso formato di GiroManager)
+// Colonne template campagne (riga 4 = header, dati da riga 5)
+// Col 0=RANKING, 1=EAN, 2=TITOLO, 3=AUTORE, 4=EDITORE, 5=PREZZO, 6=USCITA, 7=FORMATO, 8=ETA
 const COL_MAP = {
-  0: "n_cedola", 1: "ranking_editore", 2: "ranking_titolo", 3: "ean",
-  4: "titolo", 5: "autore", 6: "codice_editore", 7: "editore_nome",
-  8: "prezzo", 9: "uscita", 10: "formato", 11: "eta",
-  12: "obiettivo_assegnato", 13: "il_triangolo", 14: "top_100",
-  15: "account_editore", 16: "promozione", 17: "note_comunicazione", 18: "note",
-  19: "ean_gemello_1", 20: "titolo_gemello_1",
-  21: "ean_gemello_2", 22: "titolo_gemello_2",
-  23: "ean_gemello_3", 24: "titolo_gemello_3",
+  0: "ranking_titolo",
+  1: "ean",
+  2: "titolo",
+  3: "autore",
+  4: "editore_nome",
+  5: "prezzo",
+  6: "uscita",
+  7: "formato",
+  8: "eta",
 };
 
-const REQUIRED = ["ean", "titolo", "editore_nome", "prezzo", "formato"];
+const REQUIRED = ["ean", "titolo", "editore_nome", "prezzo"];
 
 export default function CampagneImport({ campagnaId, campagnaLabel, token, onImportDone }) {
   const [file, setFile] = useState(null);
@@ -49,8 +51,8 @@ export default function CampagneImport({ campagnaId, campagnaLabel, token, onImp
         const wb = XLSX.read(evt.target.result, { type: "array" });
         const ws = wb.Sheets["CEDOLA"] || wb.Sheets[wb.SheetNames[0]];
         if (!ws) { alert("Foglio 'CEDOLA' non trovato."); return; }
+        // Header riga 4 (indice 3), dati da riga 5 (indice 4)
         const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
-        // header riga 3 (indice 3), dati da riga 4 (indice 4) — stesso schema GiroManager
         const dataRows = data.slice(4).filter(r => r.some(v => v !== ""));
 
         const parsed = [];
@@ -59,18 +61,17 @@ export default function CampagneImport({ campagnaId, campagnaLabel, token, onImp
           const obj = {};
           Object.entries(COL_MAP).forEach(([colIdx, field]) => {
             let val = row[parseInt(colIdx)] ?? "";
-            if (field === "prezzo") val = parseFloat(val) || null;
-            if (field === "obiettivo_assegnato") val = parseInt(val) || 0;
-            if (field === "il_triangolo" || field === "top_100") val = String(val).trim().toUpperCase() === "SI";
-            if (field === "ranking_editore" || field === "ranking_titolo") val = parseInt(val) || null;
-            if (field === "n_cedola") val = val ? String(val) : null;
+            if (field === "ean") val = val ? String(val).replace(/\D/g, "") : null;
+            else if (field === "prezzo") val = parseFloat(String(val).replace(",", ".")) || null;
+            else if (field === "ranking_titolo") val = parseInt(val) || null;
+            else val = val === "" ? null : String(val).trim();
             obj[field] = val === "" ? null : val;
           });
           obj.campagna_id = campagnaId;
 
           const rowErrs = [];
           REQUIRED.forEach(f => { if (!obj[f]) rowErrs.push(f); });
-          if (obj.ean && String(obj.ean).replace(/\D/g, "").length !== 13) rowErrs.push("EAN non valido");
+          if (obj.ean && obj.ean.length !== 13) rowErrs.push("EAN non valido");
           if (rowErrs.length) errs.push({ row: idx + 5, fields: rowErrs });
           parsed.push(obj);
         });
@@ -89,7 +90,6 @@ export default function CampagneImport({ campagnaId, campagnaLabel, token, onImp
     if (!campagnaId) return;
     setImporting(true);
     try {
-      // Prima cancella i titoli esistenti per questa campagna (upsert by ean + campagna_id)
       const res = await fetch(`${SUPABASE_URL}/rest/v1/campagna_titoli`, {
         method: "POST",
         headers: {
@@ -138,12 +138,20 @@ export default function CampagneImport({ campagnaId, campagnaLabel, token, onImp
 
       {step === "upload" && (
         <div style={{ maxWidth: 500 }}>
-          <div style={{ border: `2px dashed ${T.borderHi}`, borderRadius: 6, padding: 40, textAlign: "center", marginBottom: 20 }}>
+          <div style={{ border: `2px dashed ${T.borderHi}`, borderRadius: 6, padding: 40, textAlign: "center", marginBottom: 16 }}>
             <div style={{ fontSize: "32px", marginBottom: 12 }}>📂</div>
-            <div style={{ color: T.text, marginBottom: 8 }}>Carica il template Cedola compilato</div>
-            <div style={{ color: T.textMid, fontSize: "11px", marginBottom: 20 }}>File .xlsx — foglio "CEDOLA", dati da riga 5</div>
+            <div style={{ color: T.text, marginBottom: 8 }}>Carica il template Cedola Campagne</div>
+            <div style={{ color: T.textMid, fontSize: "11px", marginBottom: 20 }}>
+              File .xlsx — foglio "CEDOLA", dati da riga 5
+            </div>
             <input type="file" accept=".xlsx" onChange={handleFile} style={{ display: "none" }} id="camp-cedola-file" />
             <label htmlFor="camp-cedola-file" style={{ ...css.btn("accent"), cursor: "pointer", padding: "8px 20px" }}>Scegli file .xlsx</label>
+          </div>
+          <div style={{ color: T.textMid, fontSize: "11px" }}>
+            Non hai il template?{" "}
+            <a href="/Campagne-PDE/template_cedola_campagne.xlsx" download style={{ color: T.accent }}>
+              Scaricalo qui
+            </a>
           </div>
         </div>
       )}
@@ -177,24 +185,21 @@ export default function CampagneImport({ campagnaId, campagnaLabel, token, onImp
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
-                <tr>{["#", "EAN", "Titolo", "Autore", "Editore", "Prezzo", "Uscita", "Formato", "Obj", "▲", "★"].map(h => <th key={h} style={css.th}>{h}</th>)}</tr>
+                <tr>{["Rk", "EAN", "Titolo", "Autore", "Editore", "Prezzo", "Uscita", "Formato"].map(h => <th key={h} style={css.th}>{h}</th>)}</tr>
               </thead>
               <tbody>
                 {rows.map((r, i) => {
                   const hasErr = errors.find(e => e.row === i + 5);
                   return (
                     <tr key={i} style={{ background: hasErr ? T.red + "11" : i % 2 === 0 ? "transparent" : T.surface + "66" }}>
-                      <td style={{ ...css.td, color: T.textMid }}>{r.n_cedola}</td>
+                      <td style={{ ...css.td, color: T.textMid, textAlign: "center" }}>{r.ranking_titolo}</td>
                       <td style={{ ...css.td, fontFamily: "monospace", fontSize: "11px", color: T.textMid }}>{r.ean}</td>
-                      <td style={{ ...css.td, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: "600" }}>{r.titolo}</td>
+                      <td style={{ ...css.td, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: "600" }}>{r.titolo}</td>
                       <td style={{ ...css.td, color: T.textMid }}>{r.autore}</td>
                       <td style={{ ...css.td, color: T.accent }}>{r.editore_nome}</td>
                       <td style={css.td}>€ {r.prezzo}</td>
                       <td style={{ ...css.td, color: T.textMid }}>{r.uscita}</td>
                       <td style={css.td}>{r.formato}</td>
-                      <td style={css.td}>{r.obiettivo_assegnato}</td>
-                      <td style={css.td}>{r.il_triangolo ? "▲" : ""}</td>
-                      <td style={css.td}>{r.top_100 ? "★" : ""}</td>
                     </tr>
                   );
                 })}
