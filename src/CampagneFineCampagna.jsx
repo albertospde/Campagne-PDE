@@ -3,11 +3,11 @@ import { useState, useMemo } from "react";
 const T = {
   bg: "#1a2140", surface: "#212d54", border: "#2e3d6b", borderHi: "#3d4f82",
   text: "#f0f2f8", textMid: "#8b9cc8", textDim: "#4a5a8a",
-  accent: "#7b9fe8", green: "#4caf7d", red: "#e05c5c", purple: "#9c6fcf",
+  accent: "#7b9fe8", green: "#4caf7d", red: "#e05c5c",
 };
 
 const css = {
-  btn: (v = "default") => ({ padding: "6px 14px", border: `1px solid ${v === "accent" ? T.accent : T.border}`, background: v === "accent" ? T.accent : "transparent", color: v === "accent" ? "#000" : T.text, cursor: "pointer", fontSize: "12px", fontFamily: "inherit", borderRadius: 3, fontWeight: v === "accent" ? "700" : "400" }),
+  btn: (v = "default") => ({ padding: "6px 14px", border: `1px solid ${v === "accent" ? T.accent : v === "ghost" ? T.borderHi : T.border}`, background: v === "accent" ? T.accent : "transparent", color: v === "accent" ? "#000" : T.text, cursor: "pointer", fontSize: "12px", fontFamily: "inherit", borderRadius: 3, fontWeight: v === "accent" ? "700" : "400" }),
   input: { background: T.bg, border: `1px solid ${T.border}`, color: T.text, padding: "5px 10px", fontSize: "12px", fontFamily: "inherit", borderRadius: 3, outline: "none" },
   th: (sortable) => ({ padding: "8px 12px", textAlign: "left", color: T.textMid, fontWeight: "400", fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap", background: T.surface, position: "sticky", top: 0, zIndex: 1, cursor: sortable ? "pointer" : "default" }),
   td: { padding: "8px 12px", borderBottom: `1px solid ${T.border}22`, verticalAlign: "middle", fontSize: "12px" },
@@ -23,7 +23,6 @@ const CANALI_LABELS = {
 
 const CANALI_ORDER = ["FELTRINELLI", "MONDADORI", "UBIK", "GIUNTI", "LIBRACCIO", "LIB_RELIGIOSE", "LIB_COOP", "INDIPENDENTI_ALTRE_CATENE", "FASTBOOK", "CENTROLIBRI", "GROSSISTI", "AMAZON", "IBS", "ALTRI_ONLINE"];
 
-// Macrogruppi per il recap (stile GiroManager)
 const MACROGRUPPI = [
   { id: "RETE", label: "Rete", canali: ["LIBRACCIO", "LIB_RELIGIOSE", "LIB_COOP", "INDIPENDENTI_ALTRE_CATENE"] },
   { id: "CATENE", label: "Catene Centralizzate", canali: ["FELTRINELLI", "MONDADORI", "UBIK", "GIUNTI"] },
@@ -31,27 +30,20 @@ const MACROGRUPPI = [
   { id: "ONLINE", label: "Online", canali: ["AMAZON", "IBS", "ALTRI_ONLINE"] },
 ];
 
-// Card recap macrogruppo
-function RecapCard({ label, totPren, canali, canaliPresenti, totalePerCanale }) {
+function RecapCard({ label, canali, canaliPresenti, totalePerCanale }) {
   const canaliCard = canali.filter(c => canaliPresenti.includes(c));
   const totCard = canaliCard.reduce((s, c) => s + (totalePerCanale[c] || 0), 0);
-
   return (
-    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: "14px 18px", minWidth: 200, flex: 1 }}>
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: "14px 18px", flex: 1, minWidth: 180 }}>
       <div style={{ color: T.textMid, fontSize: "10px", fontWeight: "700", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8 }}>{label}</div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
-        <span style={{ color: T.accent, fontSize: "22px", fontWeight: "700" }}>{totCard.toLocaleString("it")}</span>
-        <span style={{ color: T.textDim, fontSize: "10px" }}>copie</span>
-      </div>
+      <div style={{ color: T.accent, fontSize: "22px", fontWeight: "700", marginBottom: 10 }}>{totCard.toLocaleString("it")}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         {canaliCard.map(c => {
           const q = totalePerCanale[c] || 0;
           return (
-            <div key={c} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div key={c} style={{ display: "flex", justifyContent: "space-between" }}>
               <span style={{ color: T.textMid, fontSize: "11px" }}>{CANALI_LABELS[c] || c}</span>
-              <span style={{ color: q > 0 ? T.green : T.textDim, fontWeight: q > 0 ? "700" : "400", fontSize: "12px" }}>
-                {q > 0 ? q.toLocaleString("it") : "—"}
-              </span>
+              <span style={{ color: q > 0 ? T.green : T.textDim, fontWeight: q > 0 ? "700" : "400", fontSize: "12px" }}>{q > 0 ? q.toLocaleString("it") : "—"}</span>
             </div>
           );
         })}
@@ -60,15 +52,85 @@ function RecapCard({ label, totPren, canali, canaliPresenti, totalePerCanale }) 
   );
 }
 
-export default function CampagneFineCampagna({ titoli, prenotato, campagnaLabel }) {
+// Dropdown multi-select canali con ricerca
+function CanaliMultiSelect({ canaliPresenti, selected, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filtered = canaliPresenti.filter(c =>
+    (CANALI_LABELS[c] || c).toLowerCase().includes(search.toLowerCase())
+  );
+
+  const toggleCanale = (c) => {
+    if (selected.includes(c)) onChange(selected.filter(x => x !== c));
+    else onChange([...selected, c]);
+  };
+
+  const label = selected.length === 0
+    ? "Tutti i canali"
+    : selected.length === 1
+      ? CANALI_LABELS[selected[0]] || selected[0]
+      : `${selected.length} canali`;
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ ...css.input, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, minWidth: 160, justifyContent: "space-between" }}
+      >
+        <span style={{ color: selected.length > 0 ? T.accent : T.textMid }}>{label}</span>
+        <span style={{ color: T.textDim, fontSize: "10px" }}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 50, background: T.surface, border: `1px solid ${T.borderHi}`, borderRadius: 4, marginTop: 4, width: 220, boxShadow: "0 4px 16px #0006" }}>
+          <div style={{ padding: "8px 8px 4px" }}>
+            <input
+              autoFocus
+              style={{ ...css.input, width: "100%", boxSizing: "border-box" }}
+              placeholder="Cerca canale…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          {selected.length > 0 && (
+            <div style={{ padding: "2px 8px 4px" }}>
+              <button
+                onClick={() => { onChange([]); setOpen(false); }}
+                style={{ ...css.btn(), fontSize: "10px", padding: "2px 8px", color: T.red, borderColor: T.red + "44" }}
+              >
+                Deseleziona tutti
+              </button>
+            </div>
+          )}
+          <div style={{ maxHeight: 200, overflowY: "auto" }}>
+            {filtered.map(c => (
+              <label key={c} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", cursor: "pointer", background: selected.includes(c) ? T.accent + "18" : "transparent" }}>
+                <input
+                  type="checkbox"
+                  checked={selected.includes(c)}
+                  onChange={() => toggleCanale(c)}
+                  style={{ accentColor: T.accent }}
+                />
+                <span style={{ color: selected.includes(c) ? T.accent : T.text, fontSize: "12px" }}>{CANALI_LABELS[c] || c}</span>
+              </label>
+            ))}
+            {filtered.length === 0 && <div style={{ padding: "10px 12px", color: T.textDim, fontSize: "11px" }}>Nessun canale trovato</div>}
+          </div>
+        </div>
+      )}
+      {open && <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+export default function CampagneRiepilogo({ titoli, prenotato, campagnaLabel }) {
   const [search, setSearch] = useState("");
   const [filterEditore, setFilterEditore] = useState("");
-  const [filterCanale, setFilterCanale] = useState("");
+  const [canaliVisibili, setCanaliVisibili] = useState([]); // [] = tutti
   const [soloPrenotati, setSoloPrenotati] = useState(false);
   const [sortKey, setSortKey] = useState("ranking_titolo");
   const [sortDir, setSortDir] = useState(1);
 
-  // Aggrega prenotato per titolo_id → { canale_codice: qta }
   const prenMap = useMemo(() => {
     const m = {};
     prenotato.forEach(p => {
@@ -78,14 +140,18 @@ export default function CampagneFineCampagna({ titoli, prenotato, campagnaLabel 
     return m;
   }, [prenotato]);
 
-  // Canali presenti nel prenotato (in ordine)
   const canaliPresenti = useMemo(() => {
     const set = new Set();
     prenotato.forEach(p => set.add(p.canale_codice));
     return CANALI_ORDER.filter(c => set.has(c));
   }, [prenotato]);
 
-  // Totale per canale (su tutti i titoli, senza filtri — per il recap)
+  // Colonne canale da mostrare in tabella (filtro selezione multipla)
+  const canaliColonne = useMemo(() =>
+    canaliVisibili.length > 0 ? canaliVisibili : canaliPresenti,
+    [canaliVisibili, canaliPresenti]
+  );
+
   const totalePerCanale = useMemo(() => {
     const m = {};
     prenotato.forEach(p => { m[p.canale_codice] = (m[p.canale_codice] || 0) + p.quantita; });
@@ -104,13 +170,14 @@ export default function CampagneFineCampagna({ titoli, prenotato, campagnaLabel 
     return titoli
       .map(t => {
         const pranCanali = prenMap[t.id] || {};
-        const totPren = Object.values(pranCanali).reduce((s, v) => s + v, 0);
-        return { ...t, pranCanali, totPren };
+        // Totale calcolato solo sui canali visibili se c'è filtro
+        const totPren = canaliColonne.reduce((s, c) => s + (pranCanali[c] || 0), 0);
+        const totPrenAll = Object.values(pranCanali).reduce((s, v) => s + v, 0);
+        return { ...t, pranCanali, totPren, totPrenAll };
       })
       .filter(t => {
-        if (soloPrenotati && t.totPren === 0) return false;
+        if (soloPrenotati && t.totPrenAll === 0) return false;
         if (filterEditore && t.editore_nome !== filterEditore) return false;
-        if (filterCanale && !(t.pranCanali[filterCanale] > 0)) return false;
         if (search) {
           const q = search.toLowerCase();
           return (t.titolo || "").toLowerCase().includes(q) || (t.ean || "").includes(q) || (t.autore || "").toLowerCase().includes(q);
@@ -119,7 +186,7 @@ export default function CampagneFineCampagna({ titoli, prenotato, campagnaLabel 
       })
       .sort((a, b) => {
         let va = a[sortKey], vb = b[sortKey];
-        if (["totPren", "ranking_titolo", "ranking_editore"].includes(sortKey)) {
+        if (["totPren", "ranking_titolo"].includes(sortKey)) {
           va = Number(va) || 0; vb = Number(vb) || 0;
         } else {
           va = String(va || ""); vb = String(vb || "");
@@ -128,53 +195,38 @@ export default function CampagneFineCampagna({ titoli, prenotato, campagnaLabel 
         if (va > vb) return sortDir;
         return 0;
       });
-  }, [titoli, prenMap, search, filterEditore, filterCanale, soloPrenotati, sortKey, sortDir]);
+  }, [titoli, prenMap, search, filterEditore, soloPrenotati, sortKey, sortDir, canaliColonne]);
 
   const kpi = useMemo(() => ({
     totTitoli: rows.length,
-    totConPren: rows.filter(r => r.totPren > 0).length,
+    totConPren: rows.filter(r => r.totPrenAll > 0).length,
     totCopie: rows.reduce((s, r) => s + r.totPren, 0),
-  }), [rows]);
+  }), [rows, canaliColonne]);
 
   const exportExcel = () => {
     const XLSX = window.XLSX;
     const headers = [
-      "Ranking", "EAN", "Titolo", "Autore", "Editore", "Prezzo", "Uscita", "Formato",
-      ...canaliPresenti.map(c => CANALI_LABELS[c] || c),
-      "TOTALE PRENOTATO",
+      "Ranking", "EAN", "Titolo", "Autore", "Editore", "Prezzo", "Uscita",
+      ...canaliColonne.map(c => CANALI_LABELS[c] || c),
+      "TOTALE",
     ];
     const dataRows = rows.map(r => [
-      r.ranking_titolo, r.ean, r.titolo, r.autore, r.editore_nome, r.prezzo, r.uscita, r.formato,
-      ...canaliPresenti.map(c => r.pranCanali[c] || 0),
+      r.ranking_titolo, r.ean, r.titolo, r.autore, r.editore_nome, r.prezzo, r.uscita,
+      ...canaliColonne.map(c => r.pranCanali[c] || 0),
       r.totPren,
     ]);
-    const totRow = [
-      "", "", "TOTALE", "", "", "", "", "",
-      ...canaliPresenti.map(c => rows.reduce((s, r) => s + (r.pranCanali[c] || 0), 0)),
+    const totRow = ["", "", "TOTALE", "", "", "", "",
+      ...canaliColonne.map(c => rows.reduce((s, r) => s + (r.pranCanali[c] || 0), 0)),
       kpi.totCopie,
     ];
     const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows, totRow]);
     ws["!cols"] = [
-      { wch: 8 }, { wch: 14 }, { wch: 36 }, { wch: 22 }, { wch: 22 }, { wch: 8 }, { wch: 10 }, { wch: 10 },
-      ...canaliPresenti.map(() => ({ wch: 13 })),
-      { wch: 14 },
+      { wch: 8 }, { wch: 14 }, { wch: 36 }, { wch: 22 }, { wch: 22 }, { wch: 8 }, { wch: 10 },
+      ...canaliColonne.map(() => ({ wch: 13 })), { wch: 14 },
     ];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "CAMPAGNA");
-
-    // Foglio riepilogo per editore
-    const byEditore = {};
-    rows.forEach(r => {
-      if (!byEditore[r.editore_nome]) byEditore[r.editore_nome] = { pren: 0, titoli: 0 };
-      byEditore[r.editore_nome].pren += r.totPren;
-      byEditore[r.editore_nome].titoli += 1;
-    });
-    const wsR = XLSX.utils.aoa_to_sheet([
-      ["Editore", "N. Titoli", "Prenotato"],
-      ...Object.entries(byEditore).sort((a, b) => b[1].pren - a[1].pren).map(([e, v]) => [e, v.titoli, v.pren]),
-    ]);
-    XLSX.utils.book_append_sheet(wb, wsR, "RIEPILOGO EDITORI");
-    XLSX.writeFile(wb, `CAMPAGNA_${campagnaLabel.replace(/\s+/g, "_")}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, "RIEPILOGO");
+    XLSX.writeFile(wb, `RIEPILOGO_${campagnaLabel.replace(/\s+/g, "_")}.xlsx`);
   };
 
   return (
@@ -185,19 +237,13 @@ export default function CampagneFineCampagna({ titoli, prenotato, campagnaLabel 
         <div style={{ padding: "14px 20px", borderBottom: `1px solid ${T.border}`, background: T.bg }}>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             {MACROGRUPPI.map(mg => (
-              <RecapCard
-                key={mg.id}
-                label={mg.label}
-                canali={mg.canali}
-                canaliPresenti={canaliPresenti}
-                totalePerCanale={totalePerCanale}
-              />
+              <RecapCard key={mg.id} label={mg.label} canali={mg.canali} canaliPresenti={canaliPresenti} totalePerCanale={totalePerCanale} />
             ))}
           </div>
         </div>
       )}
 
-      {/* KPI bar */}
+      {/* KPI + FILTRI */}
       <div style={{ padding: "10px 20px", borderBottom: `1px solid ${T.border}`, display: "flex", gap: 20, flexWrap: "wrap", background: T.surface, alignItems: "center" }}>
         {[
           ["Titoli", kpi.totTitoli, T.text],
@@ -209,7 +255,6 @@ export default function CampagneFineCampagna({ titoli, prenotato, campagnaLabel 
             <span style={{ color, fontWeight: "700", fontSize: "16px" }}>{val}</span>
           </div>
         ))}
-        {/* Filtri */}
         <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap", alignItems: "center" }}>
           <input
             style={{ ...css.input, width: 180 }}
@@ -221,10 +266,11 @@ export default function CampagneFineCampagna({ titoli, prenotato, campagnaLabel 
             <option value="">Tutti gli editori</option>
             {editori.map(e => <option key={e} value={e}>{e}</option>)}
           </select>
-          <select style={css.input} value={filterCanale} onChange={e => setFilterCanale(e.target.value)}>
-            <option value="">Tutti i canali</option>
-            {canaliPresenti.map(c => <option key={c} value={c}>{CANALI_LABELS[c] || c}</option>)}
-          </select>
+          <CanaliMultiSelect
+            canaliPresenti={canaliPresenti}
+            selected={canaliVisibili}
+            onChange={setCanaliVisibili}
+          />
           <label style={{ display: "flex", alignItems: "center", gap: 6, color: T.textMid, fontSize: "12px", cursor: "pointer" }}>
             <input type="checkbox" checked={soloPrenotati} onChange={e => setSoloPrenotati(e.target.checked)} />
             Solo prenotati
@@ -233,18 +279,17 @@ export default function CampagneFineCampagna({ titoli, prenotato, campagnaLabel 
         </div>
       </div>
 
-      {/* TABLE */}
+      {/* TABELLA */}
       <div style={{ flex: 1, overflowY: "auto", overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 800 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
           <thead>
             <tr>
               <th style={css.th(true)} onClick={() => toggleSort("ranking_titolo")}>Rk{sortIcon("ranking_titolo")}</th>
               <th style={css.th(false)}>EAN</th>
               <th style={css.th(true)} onClick={() => toggleSort("titolo")}>Titolo{sortIcon("titolo")}</th>
               <th style={css.th(true)} onClick={() => toggleSort("editore_nome")}>Editore{sortIcon("editore_nome")}</th>
-              {/* Totale PRIMA dei canali */}
               <th style={{ ...css.th(true), color: T.accent }} onClick={() => toggleSort("totPren")}>Totale{sortIcon("totPren")}</th>
-              {canaliPresenti.map(c => (
+              {canaliColonne.map(c => (
                 <th key={c} style={css.th(false)} title={CANALI_LABELS[c] || c}>
                   {(CANALI_LABELS[c] || c).substring(0, 9)}
                 </th>
@@ -258,11 +303,10 @@ export default function CampagneFineCampagna({ titoli, prenotato, campagnaLabel 
                 <td style={{ ...css.td, fontFamily: "monospace", fontSize: "11px", color: T.textDim }}>{r.ean}</td>
                 <td style={{ ...css.td, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: "600" }}>{r.titolo}</td>
                 <td style={{ ...css.td, color: T.accent, whiteSpace: "nowrap" }}>{r.editore_nome}</td>
-                {/* Totale prima */}
                 <td style={{ ...css.td, color: r.totPren > 0 ? T.accent : T.textDim, fontWeight: "700", textAlign: "right" }}>
                   {r.totPren > 0 ? r.totPren.toLocaleString("it") : "—"}
                 </td>
-                {canaliPresenti.map(c => (
+                {canaliColonne.map(c => (
                   <td key={c} style={{ ...css.td, textAlign: "right", color: (r.pranCanali[c] || 0) > 0 ? T.green : T.textDim }}>
                     {(r.pranCanali[c] || 0) > 0 ? r.pranCanali[c].toLocaleString("it") : "—"}
                   </td>
@@ -270,7 +314,7 @@ export default function CampagneFineCampagna({ titoli, prenotato, campagnaLabel 
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={5 + canaliPresenti.length} style={{ textAlign: "center", padding: 40, color: T.textDim }}>Nessun titolo trovato.</td></tr>
+              <tr><td colSpan={5 + canaliColonne.length} style={{ textAlign: "center", padding: 40, color: T.textDim }}>Nessun titolo trovato.</td></tr>
             )}
           </tbody>
         </table>
