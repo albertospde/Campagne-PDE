@@ -85,7 +85,7 @@ function LoginScreen({ onLogin }) {
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: 40, width: 340 }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ display: "inline-block", background: "#fff", borderRadius: 8, padding: "8px 14px", marginBottom: 16 }}>
-            <img src="https://albertospde.github.io/pde-hub/pde_logo.png" style={{ height: 32, display: "block" }} alt="PDE" />
+            <img src="/Campagne-PDE/pde_logo.png" style={{ height: 32, display: "block" }} alt="PDE" />
           </div>
           <div style={{ color: T.accent, fontSize: "22px", fontWeight: "700", letterSpacing: "0.12em" }}>CAMPAGNE</div>
           <div style={{ color: T.textMid, fontSize: "10px", letterSpacing: "0.15em", marginTop: 4 }}>GESTIONE CAMPAGNE PROMOZIONALI</div>
@@ -231,7 +231,7 @@ export default function Campagne() {
         {/* Logo */}
         <div style={{ padding: "14px 16px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ background: "#fff", borderRadius: 6, padding: "3px 7px" }}>
-            <img src="https://albertospde.github.io/pde-hub/pde_logo.png" style={{ height: 22, display: "block" }} alt="PDE" />
+            <img src="/Campagne-PDE/pde_logo.png" style={{ height: 22, display: "block" }} alt="PDE" />
           </div>
           <span style={{ color: T.accent, fontWeight: "700", fontSize: "13px", letterSpacing: "0.1em" }}>CAMPAGNE</span>
         </div>
