@@ -336,8 +336,8 @@ export default function Campagne() {
               )}
               {activeModule === "kit" && (
                 <CampagneKit
-                  campagnaId={campagnaSel.id}
-                  campagnaLabel={`${campagnaSel.nome} ${campagnaSel.anno}`}
+                  titoli={titoli}
+                  prenotato={prenotato}
                 />
               )}
               {activeModule === "prenotato" && (
