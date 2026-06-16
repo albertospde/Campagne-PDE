@@ -24,9 +24,15 @@ const CANALI_LABELS = {
   CENTROLIBRI: "Centrolibri",
 };
 
-function DeltaBadge({ delta }) {
-  if (delta === 0) return <span style={{ color: T.green, fontWeight: "700" }}>✓ OK</span>;
-  return <span style={{ color: T.red, fontWeight: "700" }}>{delta > 0 ? `+${delta} in eccesso` : `${delta} mancanti`}</span>;
+function DeltaBadge({ delta_kit, prop_errata }) {
+  if (delta_kit === 0 && !prop_errata) return <span style={{ color: T.green, fontWeight: "700" }}>✓ OK</span>;
+  const color = T.red;
+  const label = delta_kit > 0 ? `+${delta_kit} kit in eccesso` : `${delta_kit} kit mancanti`;
+  return (
+    <span style={{ color, fontWeight: "700" }}>
+      {label}{prop_errata ? <span style={{ color: T.yellow, fontSize: "10px", marginLeft: 6 }}>⚠ proporzione errata</span> : ""}
+    </span>
+  );
 }
 
 export default function CampagneKit({ campagnaId, token, titoli }) {
@@ -92,18 +98,21 @@ export default function CampagneKit({ campagnaId, token, titoli }) {
           .filter(c => c.kit_ord > 0 || c.libri_ord > 0)
           .map(c => {
             const libri_attesi = c.kit_ord * prop;
-            const delta = c.libri_ord - libri_attesi;
-            return { ...c, libri_attesi, delta };
+            const delta_libri = c.libri_ord - libri_attesi;
+            const delta_kit = delta_libri !== 0 ? Math.round(delta_libri / prop) : 0;
+            const prop_errata = delta_libri !== 0 && delta_libri % prop !== 0;
+            return { ...c, libri_attesi, delta_libri, delta_kit, prop_errata };
           })
           .sort((a, b) => a.nome.localeCompare(b.nome));
 
         const tot_kit = clienti.reduce((s, c) => s + c.kit_ord, 0);
         const tot_libri_attesi = clienti.reduce((s, c) => s + c.libri_attesi, 0);
         const tot_libri_ord = clienti.reduce((s, c) => s + c.libri_ord, 0);
-        const tot_delta = clienti.reduce((s, c) => s + c.delta, 0);
-        const n_errori = clienti.filter(c => c.delta !== 0).length;
+        const tot_delta_kit = clienti.reduce((s, c) => s + c.delta_kit, 0);
+        const n_errori = clienti.filter(c => c.delta_kit !== 0 || c.prop_errata).length;
+        const has_prop_errata = clienti.some(c => c.prop_errata);
 
-        return { canale, clienti, tot_kit, tot_libri_attesi, tot_libri_ord, tot_delta, n_errori };
+        return { canale, clienti, tot_kit, tot_libri_attesi, tot_libri_ord, tot_delta_kit, n_errori, has_prop_errata };
       })
       .filter(r => r.tot_kit > 0 || r.tot_libri_ord > 0)
       .sort((a, b) => b.tot_kit - a.tot_kit);
@@ -134,7 +143,7 @@ export default function CampagneKit({ campagnaId, token, titoli }) {
     kit: rows.reduce((s, r) => s + r.tot_kit, 0),
     attesi: rows.reduce((s, r) => s + r.tot_libri_attesi, 0),
     effettivi: rows.reduce((s, r) => s + r.tot_libri_ord, 0),
-    delta: rows.reduce((s, r) => s + r.tot_delta, 0),
+    delta: rows.reduce((s, r) => s + r.tot_delta_kit, 0),
     errori: rows.reduce((s, r) => s + r.n_errori, 0),
   }), [rows]);
 
@@ -142,13 +151,13 @@ export default function CampagneKit({ campagnaId, token, titoli }) {
     if (!rows.length) return;
     const XLSX = window.XLSX;
     const sheetData = [];
-    sheetData.push(["Canale", "Cod. Cliente", "Nome Cliente", "Kit Ordinati", "Libri Attesi", "Libri Effettivi", "Delta"]);
+    sheetData.push(["Canale", "Cod. Cliente", "Nome Cliente", "Kit Ordinati", "Libri Attesi", "Libri Effettivi", "Delta (kit)", "Note"]);
     rows.forEach(r => {
       // Riga canale totale
-      sheetData.push([CANALI_LABELS[r.canale] || r.canale, "", "TOTALE CANALE", r.tot_kit, r.tot_libri_attesi, r.tot_libri_ord, r.tot_delta]);
+      sheetData.push([CANALI_LABELS[r.canale] || r.canale, "", "TOTALE CANALE", r.tot_kit, r.tot_libri_attesi, r.tot_libri_ord, r.tot_delta_kit]);
       // Righe clienti
       r.clienti.forEach(c => {
-        sheetData.push(["", c.codice, c.nome, c.kit_ord, c.libri_attesi, c.libri_ord, c.delta]);
+        sheetData.push(["", c.codice, c.nome, c.kit_ord, c.libri_attesi, c.libri_ord, c.delta_kit, c.prop_errata ? "PROPORZIONE ERRATA" : ""]);
       });
     });
     const ws = XLSX.utils.aoa_to_sheet(sheetData);
@@ -210,7 +219,7 @@ export default function CampagneKit({ campagnaId, token, titoli }) {
               ["Kit totali", totali.kit, T.accent],
               ["Libri attesi", totali.attesi, T.textMid],
               ["Libri effettivi", totali.effettivi, T.text],
-              ["Delta totale", (totali.delta > 0 ? "+" : "") + totali.delta, totali.delta === 0 ? T.green : T.red],
+              ["Delta totale (kit)", (totali.delta > 0 ? "+" : "") + totali.delta + " kit", totali.delta === 0 ? T.green : T.red],
               ["Clienti con errori", totali.errori, totali.errori === 0 ? T.green : T.red],
             ].map(([label, val, color]) => (
               <div key={label} style={{ display: "flex", flexDirection: "column", gap: 1 }}>
@@ -248,7 +257,7 @@ export default function CampagneKit({ campagnaId, token, titoli }) {
                   return (
                     <>
                       {/* Riga canale */}
-                      <tr key={r.canale} style={{ background: r.tot_delta !== 0 ? T.red + "0d" : i % 2 === 0 ? "transparent" : T.surface + "55", cursor: "pointer" }} onClick={() => toggleEspanso(r.canale)}>
+                      <tr key={r.canale} style={{ background: r.tot_delta_kit !== 0 || r.has_prop_errata ? T.red + "0d" : i % 2 === 0 ? "transparent" : T.surface + "55", cursor: "pointer" }} onClick={() => toggleEspanso(r.canale)}>
                         <td style={{ ...css.td, textAlign: "center", padding: "8px 6px" }}>
                           <span style={{ color: T.accent, fontSize: "14px", fontWeight: "700" }}>{aperto ? "−" : "+"}</span>
                         </td>
@@ -256,13 +265,13 @@ export default function CampagneKit({ campagnaId, token, titoli }) {
                         <td style={{ ...css.td, textAlign: "right", color: T.accent, fontWeight: "700" }}>{r.tot_kit.toLocaleString("it")}</td>
                         <td style={{ ...css.td, textAlign: "right", color: T.textMid }}>{r.tot_libri_attesi.toLocaleString("it")}</td>
                         <td style={{ ...css.td, textAlign: "right", color: T.text, fontWeight: "600" }}>{r.tot_libri_ord.toLocaleString("it")}</td>
-                        <td style={{ ...css.td, textAlign: "right" }}><DeltaBadge delta={r.tot_delta} /></td>
+                        <td style={{ ...css.td, textAlign: "right" }}><DeltaBadge delta_kit={r.tot_delta_kit} prop_errata={r.has_prop_errata} /></td>
                         <td style={{ ...css.td, textAlign: "center", color: T.textMid, fontSize: "11px" }}>{r.clienti.length}</td>
                       </tr>
 
                       {/* Righe clienti espanse */}
                       {aperto && r.clienti.map(c => (
-                        <tr key={`${r.canale}_${c.codice}`} style={{ background: c.delta !== 0 ? T.red + "08" : T.surface + "33" }}>
+                        <tr key={`${r.canale}_${c.codice}`} style={{ background: c.delta_kit !== 0 || c.prop_errata ? T.red + "08" : T.surface + "33" }}>
                           <td style={{ ...css.td, padding: "6px 6px" }}></td>
                           <td style={{ ...css.td, paddingLeft: 28 }}>
                             <span style={{ color: T.textDim, fontFamily: "monospace", fontSize: "11px", marginRight: 8 }}>{c.codice}</span>
@@ -271,7 +280,7 @@ export default function CampagneKit({ campagnaId, token, titoli }) {
                           <td style={{ ...css.td, textAlign: "right", color: T.accent }}>{c.kit_ord > 0 ? c.kit_ord : "—"}</td>
                           <td style={{ ...css.td, textAlign: "right", color: T.textDim }}>{c.libri_attesi > 0 ? c.libri_attesi : "—"}</td>
                           <td style={{ ...css.td, textAlign: "right", color: T.text }}>{c.libri_ord > 0 ? c.libri_ord : "—"}</td>
-                          <td style={{ ...css.td, textAlign: "right" }}><DeltaBadge delta={c.delta} /></td>
+                          <td style={{ ...css.td, textAlign: "right" }}><DeltaBadge delta_kit={c.delta_kit} prop_errata={c.prop_errata} /></td>
                           <td></td>
                         </tr>
                       ))}
@@ -285,7 +294,7 @@ export default function CampagneKit({ campagnaId, token, titoli }) {
                   <td style={{ ...css.td, textAlign: "right", fontWeight: "700", color: T.accent }}>{totali.kit.toLocaleString("it")}</td>
                   <td style={{ ...css.td, textAlign: "right", fontWeight: "700", color: T.textMid }}>{totali.attesi.toLocaleString("it")}</td>
                   <td style={{ ...css.td, textAlign: "right", fontWeight: "700", color: T.text }}>{totali.effettivi.toLocaleString("it")}</td>
-                  <td style={{ ...css.td, textAlign: "right" }}><DeltaBadge delta={totali.delta} /></td>
+                  <td style={{ ...css.td, textAlign: "right" }}><DeltaBadge delta_kit={totali.delta} prop_errata={false} /></td>
                   <td></td>
                 </tr>
               </tbody>
