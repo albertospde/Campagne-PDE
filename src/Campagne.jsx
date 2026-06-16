@@ -336,8 +336,9 @@ export default function Campagne() {
               )}
               {activeModule === "kit" && (
                 <CampagneKit
+                  campagnaId={campagnaSel.id}
+                  token={session.token}
                   titoli={titoli}
-                  prenotato={prenotato}
                 />
               )}
               {activeModule === "prenotato" && (
