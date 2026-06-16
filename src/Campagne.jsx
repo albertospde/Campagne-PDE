@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import CampagneImport from "./CampagneImport.jsx";
 import CampagnePrenotato from "./CampagnePrenotato.jsx";
-import CampagneFineCampagna from "./CampagneFineCampagna.jsx";
+import CampagneRiepilogo from "./CampagneFineCampagna.jsx";
 
 const SUPABASE_URL = "https://tdflwenlylhctxssatax.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkZmx3ZW5seWxoY3R4c3NhdGF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMzgyNzYsImV4cCI6MjA5MTkxNDI3Nn0.l35qEL7LOvyYuI1McQlVqj4vbyTqmlevcmqWbTGYi2Q";
@@ -55,7 +55,7 @@ const css = {
 
 // Moduli per ogni campagna selezionata
 const MODULES = [
-  { id: "fine", label: "Fine Campagna", icon: "⊞" },
+  { id: "fine", label: "Riepilogo", icon: "⊞" },
   { id: "import", label: "Import Cedola", icon: "⬆" },
   { id: "prenotato", label: "Import Prenotato", icon: "📋" },
 ];
@@ -318,7 +318,7 @@ export default function Campagne() {
             {/* Moduli */}
             <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
               {activeModule === "fine" && (
-                <CampagneFineCampagna
+                <CampagneRiepilogo
                   titoli={titoli}
                   prenotato={prenotato}
                   campagnaLabel={`${campagnaSel.nome} ${campagnaSel.anno}`}
