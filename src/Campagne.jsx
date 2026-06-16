@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import CampagneImport from "./CampagneImport.jsx";
 import CampagnePrenotato from "./CampagnePrenotato.jsx";
+import CampagneKit from "./CampagneKit.jsx";
 import CampagneRiepilogo from "./CampagneFineCampagna.jsx";
 
 const SUPABASE_URL = "https://tdflwenlylhctxssatax.supabase.co";
@@ -58,6 +59,7 @@ const MODULES = [
   { id: "fine", label: "Riepilogo", icon: "⊞" },
   { id: "import", label: "Import Cedola", icon: "⬆" },
   { id: "prenotato", label: "Import Prenotato", icon: "📋" },
+  { id: "kit", label: "Gestione Kit", icon: "🧩" },
 ];
 
 // ── Login ──────────────────────────────────────────────────────────────────
@@ -330,6 +332,12 @@ export default function Campagne() {
                   campagnaLabel={`${campagnaSel.nome} ${campagnaSel.anno}`}
                   token={session.token}
                   onImportDone={refreshTitoli}
+                />
+              )}
+              {activeModule === "kit" && (
+                <CampagneKit
+                  campagnaId={campagnaSel.id}
+                  campagnaLabel={`${campagnaSel.nome} ${campagnaSel.anno}`}
                 />
               )}
               {activeModule === "prenotato" && (
