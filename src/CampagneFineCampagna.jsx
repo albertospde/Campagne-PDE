@@ -194,6 +194,9 @@ export default function CampagneRiepilogo({ titoli, prenotato, campagnaLabel }) 
   const exportExcel = () => {
     const XLSX = window.XLSX;
     const rowsExport = rows.filter(r => !r.escluso);
+    const wb = XLSX.utils.book_new();
+
+    // ── FOGLIO 1: DETTAGLIO TITOLI ──────────────────────────────────────
     const headers = ["Ranking", "EAN", "Titolo", "Autore", "Editore", "Prezzo", "Uscita",
       ...canaliColonne.map(c => CANALI_LABELS[c] || c), "TOTALE"];
     const dataRows = rowsExport.map(r => [
@@ -205,11 +208,60 @@ export default function CampagneRiepilogo({ titoli, prenotato, campagnaLabel }) 
       ...canaliColonne.map(c => rowsExport.reduce((s, r) => s + (r.pranCanali[c] || 0), 0)),
       rowsExport.reduce((s, r) => s + r.totPren, 0),
     ];
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows, totRow]);
-    ws["!cols"] = [{ wch: 8 }, { wch: 14 }, { wch: 36 }, { wch: 22 }, { wch: 22 }, { wch: 8 }, { wch: 10 },
+    const ws1 = XLSX.utils.aoa_to_sheet([headers, ...dataRows, totRow]);
+    ws1["!cols"] = [{ wch: 8 }, { wch: 14 }, { wch: 36 }, { wch: 22 }, { wch: 22 }, { wch: 8 }, { wch: 10 },
       ...canaliColonne.map(() => ({ wch: 13 })), { wch: 14 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "RIEPILOGO");
+    XLSX.utils.book_append_sheet(wb, ws1, "RIEPILOGO");
+
+    // ── FOGLIO 2: DASHBOARD CANALI ──────────────────────────────────────
+    const totCopie = rowsExport.reduce((s, r) => s + r.totPren, 0);
+    const nTitoli = rowsExport.length;
+    const nConPren = rowsExport.filter(r => r.totPren > 0).length;
+
+    // Macrogruppi
+    const MACROGRUPPI_EXP = [
+      { label: "Rete", canali: ["LIBRACCIO", "LIB_RELIGIOSE", "LIB_COOP", "INDIPENDENTI_ALTRE_CATENE"] },
+      { label: "Catene Centralizzate", canali: ["FELTRINELLI", "MONDADORI", "UBIK", "GIUNTI"] },
+      { label: "Grossisti", canali: ["FASTBOOK", "CENTROLIBRI", "GROSSISTI"] },
+      { label: "Online", canali: ["AMAZON", "IBS", "ALTRI_ONLINE"] },
+    ];
+
+    const dashData = [];
+    // Intestazione
+    dashData.push([campagnaLabel, "", "", ""]);
+    dashData.push([`Titoli: ${nTitoli}`, `Con prenotato: ${nConPren}`, `Totale copie: ${totCopie}`, eanEsclusi.size > 0 ? `EAN esclusi: ${eanEsclusi.size}` : ""]);
+    dashData.push([]);
+
+    // Riepilogo per macrogruppo
+    dashData.push(["MACROGRUPPO", "TOTALE COPIE", "", ""]);
+    MACROGRUPPI_EXP.forEach(mg => {
+      const canaliMg = mg.canali.filter(c => canaliColonne.includes(c));
+      const tot = canaliMg.reduce((s, c) => s + rowsExport.reduce((ss, r) => ss + (r.pranCanali[c] || 0), 0), 0);
+      dashData.push([mg.label, tot, "", ""]);
+    });
+    dashData.push([]);
+
+    // Dettaglio per canale
+    dashData.push(["CANALE", "COPIE", "% SUL TOTALE", ""]);
+    canaliColonne.forEach(c => {
+      const tot = rowsExport.reduce((s, r) => s + (r.pranCanali[c] || 0), 0);
+      const pct = totCopie > 0 ? ((tot / totCopie) * 100).toFixed(1) + "%" : "0%";
+      dashData.push([CANALI_LABELS[c] || c, tot, pct, ""]);
+    });
+    dashData.push(["TOTALE", totCopie, "100%", ""]);
+    dashData.push([]);
+
+    // Top 10 titoli per prenotato
+    dashData.push(["TOP 10 TITOLI PER PRENOTATO", "", "", ""]);
+    dashData.push(["Titolo", "Editore", "EAN", "Copie"]);
+    [...rowsExport].sort((a, b) => b.totPren - a.totPren).slice(0, 10).forEach(r => {
+      dashData.push([r.titolo, r.editore_nome, r.ean, r.totPren]);
+    });
+
+    const ws2 = XLSX.utils.aoa_to_sheet(dashData);
+    ws2["!cols"] = [{ wch: 36 }, { wch: 16 }, { wch: 14 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(wb, ws2, "DASHBOARD");
+
     XLSX.writeFile(wb, `RIEPILOGO_${campagnaLabel.replace(/\s+/g, "_")}.xlsx`);
   };
 
