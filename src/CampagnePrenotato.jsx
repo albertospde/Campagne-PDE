@@ -15,29 +15,24 @@ const css = {
   td: { padding: "7px 12px", borderBottom: `1px solid ${T.border}22`, verticalAlign: "middle", fontSize: "12px" },
 };
 
-// Stesso mapping di GiroManager
 const GRUPPI_CANALE = {
   2: "FELTRINELLI", 23: "FELTRINELLI", 59: "FELTRINELLI", 77: "FELTRINELLI",
   8: "MONDADORI", 34: "MONDADORI", 80: "MONDADORI",
-  83: "UBIK",
-  32: "GIUNTI",
+  83: "UBIK", 32: "GIUNTI",
   11: "LIBRACCIO", 56: "LIBRACCIO", 88: "LIBRACCIO", 90: "LIBRACCIO", 91: "LIBRACCIO", 92: "LIBRACCIO",
   6: "LIB_RELIGIOSE", 18: "LIB_RELIGIOSE", 19: "LIB_RELIGIOSE", 21: "LIB_RELIGIOSE", 57: "LIB_RELIGIOSE",
   36: "LIB_COOP",
   4: "INDIPENDENTI_ALTRE_CATENE", 22: "INDIPENDENTI_ALTRE_CATENE", 24: "INDIPENDENTI_ALTRE_CATENE", 60: "INDIPENDENTI_ALTRE_CATENE",
-  28: "FASTBOOK",
-  63: "CENTROLIBRI",
+  28: "FASTBOOK", 63: "CENTROLIBRI",
   25: "GROSSISTI", 30: "GROSSISTI", 94: "GROSSISTI",
-  82: "AMAZON",
-  58: "IBS",
-  33: "ALTRI_ONLINE",
+  82: "AMAZON", 58: "IBS", 33: "ALTRI_ONLINE",
 };
 
 const CANALI_LABELS = {
   FELTRINELLI: "Feltrinelli", GIUNTI: "Giunti al Punto", MONDADORI: "Mondadori",
   UBIK: "Ubik", LIBRACCIO: "Libraccio", INDIPENDENTI_ALTRE_CATENE: "Indipendenti",
   LIB_RELIGIOSE: "Librerie Religiose", LIB_COOP: "Librerie Coop", ALTRI_ONLINE: "Librerie On-line",
-  AMAZON: "Amazon", IBS: "Stereo Online", FASTBOOK: "Fastbook + GD", GROSSISTI: "Grossisti",
+  AMAZON: "Amazon", IBS: "IBS", FASTBOOK: "Fastbook + GD", GROSSISTI: "Grossisti",
   CENTROLIBRI: "Centro Libri",
 };
 
@@ -61,6 +56,7 @@ export default function CampagnePrenotato({ campagnaId, campagnaLabel, token, ti
         const data = XLSX.utils.sheet_to_json(ws, { defval: "" });
         setRighe(data);
 
+        // Aggregazione per ean+canale (per campagna_prenotato)
         const aggMap = {};
         data.forEach(row => {
           const ean = String(row["EAN"] || "").trim();
@@ -71,9 +67,8 @@ export default function CampagnePrenotato({ campagnaId, campagnaLabel, token, ti
           let canale = "INDIPENDENTI_ALTRE_CATENE";
           if (gruppoRaw !== "" && gruppoRaw !== null && gruppoRaw !== undefined) {
             const gruppoInt = parseInt(parseFloat(gruppoRaw));
-            if (!isNaN(gruppoInt) && gruppoInt !== 0) {
+            if (!isNaN(gruppoInt) && gruppoInt !== 0)
               canale = GRUPPI_CANALE[gruppoInt] || "INDIPENDENTI_ALTRE_CATENE";
-            }
           }
 
           const key = `${ean}__${canale}`;
@@ -107,7 +102,9 @@ export default function CampagnePrenotato({ campagnaId, campagnaLabel, token, ti
   const handleImport = async () => {
     setImporting(true);
     const validi = aggregato.filter(r => r.found && r.titolo_id);
-    const payload = validi.map(r => ({
+
+    // Payload 1: campagna_prenotato (aggregato per ean+canale — invariato)
+    const payloadAgg = validi.map(r => ({
       campagna_id: campagnaId,
       titolo_id: r.titolo_id,
       ean: r.ean,
@@ -115,31 +112,67 @@ export default function CampagnePrenotato({ campagnaId, campagnaLabel, token, ti
       quantita: r.qta,
     }));
 
+    // Payload 2: campagna_prenotato_clienti (dettaglio per riga del file)
+    // Include TUTTI gli EAN (anche kit/gadget non in cedola) per Gestione Kit
+    const payloadClienti = [];
+    righe.forEach(row => {
+      const ean = String(row["EAN"] || "").trim();
+      const qta = parseInt(row["Pren (Qtà)"]) || 0;
+      if (!ean || qta === 0) return;
+
+      const codice_cliente = String(row["Codice cliente"] || "").trim();
+      const nome_cliente = String(row["Nome Cliente"] || "").trim();
+      const gruppoRaw = row["Gruppo cliente"];
+
+      let canale = "INDIPENDENTI_ALTRE_CATENE";
+      if (gruppoRaw !== "" && gruppoRaw !== null && gruppoRaw !== undefined) {
+        const g = parseInt(parseFloat(gruppoRaw));
+        if (!isNaN(g) && g !== 0) canale = GRUPPI_CANALE[g] || "INDIPENDENTI_ALTRE_CATENE";
+      }
+
+      payloadClienti.push({
+        campagna_id: campagnaId,
+        ean,
+        codice_cliente,
+        nome_cliente,
+        canale_codice: canale,
+        quantita: qta,
+      });
+    });
+
     try {
-      // Cancella prenotato precedente per questa campagna, poi reinserisci
-      await fetch(`${SUPABASE_URL}/rest/v1/campagna_prenotato?campagna_id=eq.${campagnaId}`, {
-        method: "DELETE",
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` },
-      });
+      // Cancella dati precedenti per questa campagna
+      await Promise.all([
+        fetch(`${SUPABASE_URL}/rest/v1/campagna_prenotato?campagna_id=eq.${campagnaId}`, {
+          method: "DELETE", headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` },
+        }),
+        fetch(`${SUPABASE_URL}/rest/v1/campagna_prenotato_clienti?campagna_id=eq.${campagnaId}`, {
+          method: "DELETE", headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` },
+        }),
+      ]);
 
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/campagna_prenotato`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": SUPABASE_KEY,
-          "Authorization": `Bearer ${token}`,
-          "Prefer": "return=minimal",
-        },
-        body: JSON.stringify(payload),
-      });
+      // Inserisci entrambi in parallelo
+      const [res1, res2] = await Promise.all([
+        fetch(`${SUPABASE_URL}/rest/v1/campagna_prenotato`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}`, "Prefer": "return=minimal" },
+          body: JSON.stringify(payloadAgg),
+        }),
+        fetch(`${SUPABASE_URL}/rest/v1/campagna_prenotato_clienti`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}`, "Prefer": "return=minimal" },
+          body: JSON.stringify(payloadClienti),
+        }),
+      ]);
 
-      if (res.ok) {
-        setDone({ ok: payload.length, totQta: totaleFound });
+      if (res1.ok && res2.ok) {
+        setDone({ ok: payloadAgg.length, totQta: totaleFound, clienti: payloadClienti.length });
         setStep("result");
         onImportDone && onImportDone();
       } else {
-        const err = await res.json();
-        alert("Errore import: " + JSON.stringify(err));
+        const err1 = res1.ok ? null : await res1.json();
+        const err2 = res2.ok ? null : await res2.json();
+        alert("Errore import: " + JSON.stringify(err1 || err2));
       }
     } catch (e) {
       alert("Errore di rete: " + e.message);
@@ -173,7 +206,8 @@ export default function CampagnePrenotato({ campagnaId, campagnaLabel, token, ti
           <div style={{ border: `2px dashed ${T.borderHi}`, borderRadius: 6, padding: 40, textAlign: "center" }}>
             <div style={{ fontSize: "32px", marginBottom: 12 }}>📂</div>
             <div style={{ color: T.text, marginBottom: 8 }}>Carica il file "Pianifica Visite"</div>
-            <div style={{ color: T.textMid, fontSize: "11px", marginBottom: 20 }}>File .xlsx esportato da Messaggerie</div>
+            <div style={{ color: T.textMid, fontSize: "11px", marginBottom: 4 }}>File .xlsx esportato da Messaggerie</div>
+            <div style={{ color: T.textDim, fontSize: "10px", marginBottom: 20 }}>Salva anche il dettaglio cliente per Gestione Kit</div>
             <input type="file" accept=".xlsx" onChange={handleFile} style={{ display: "none" }} id="camp-pren-file" />
             <label htmlFor="camp-pren-file" style={{ ...css.btn("accent"), cursor: "pointer", padding: "8px 20px" }}>Scegli file .xlsx</label>
           </div>
@@ -239,7 +273,8 @@ export default function CampagnePrenotato({ campagnaId, campagnaLabel, token, ti
         <div style={{ textAlign: "center", padding: 60 }}>
           <div style={{ fontSize: "48px", marginBottom: 16 }}>✅</div>
           <div style={{ color: T.green, fontSize: "20px", fontWeight: "700", marginBottom: 8 }}>Import completato</div>
-          <div style={{ color: T.textMid, marginBottom: 24 }}>{done.totQta?.toLocaleString("it")} copie importate</div>
+          <div style={{ color: T.textMid, marginBottom: 8 }}>{done.totQta?.toLocaleString("it")} copie importate (aggregato per canale)</div>
+          <div style={{ color: T.textDim, fontSize: "11px", marginBottom: 24 }}>{done.clienti?.toLocaleString("it")} righe dettaglio cliente salvate per Gestione Kit</div>
           <button style={css.btn("accent")} onClick={reset}>Nuovo import</button>
         </div>
       )}
