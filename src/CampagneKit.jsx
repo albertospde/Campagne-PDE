@@ -27,7 +27,7 @@ const CANALI_LABELS = {
 function DeltaBadge({ delta_kit, prop_errata }) {
   if (delta_kit === 0 && !prop_errata) return <span style={{ color: T.green, fontWeight: "700" }}>✓ OK</span>;
   const color = T.red;
-  const label = delta_kit > 0 ? `+${delta_kit} kit in eccesso` : `${delta_kit} kit mancanti`;
+  const label = delta_kit > 0 ? `+${delta_kit} kit mancanti` : `${delta_kit} kit in eccesso`;
   return (
     <span style={{ color, fontWeight: "700" }}>
       {label}{prop_errata ? <span style={{ color: T.yellow, fontSize: "10px", marginLeft: 6 }}>⚠ proporzione errata</span> : ""}
