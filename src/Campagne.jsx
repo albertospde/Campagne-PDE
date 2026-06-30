@@ -156,6 +156,7 @@ export default function Campagne() {
   const [activeModule, setActiveModule] = useState("fine");
   const [titoli, setTitoli] = useState([]);
   const [prenotato, setPrenotato] = useState([]);
+  const [prenotatoClienti, setPrenotatoClienti] = useState([]);
   const [showNuova, setShowNuova] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [filterAnno, setFilterAnno] = useState("");
@@ -185,17 +186,19 @@ export default function Campagne() {
   // Carica titoli e prenotato della campagna selezionata
   const refreshTitoli = async () => {
     if (!campagnaSel || !session) return;
-    const [t, p] = await Promise.all([
+    const [t, p, pc] = await Promise.all([
       sbFetch(`campagna_titoli?campagna_id=eq.${campagnaSel.id}&select=*&order=ranking_titolo.asc`, session.token),
       sbFetch(`campagna_prenotato?campagna_id=eq.${campagnaSel.id}&select=*`, session.token),
+      sbFetch(`campagna_prenotato_clienti?campagna_id=eq.${campagnaSel.id}&select=*`, session.token),
     ]);
     if (Array.isArray(t)) setTitoli(t);
     if (Array.isArray(p)) setPrenotato(p);
+    if (Array.isArray(pc)) setPrenotatoClienti(pc);
   };
 
   useEffect(() => {
     if (campagnaSel) refreshTitoli();
-    else { setTitoli([]); setPrenotato([]); }
+    else { setTitoli([]); setPrenotato([]); setPrenotatoClienti([]); }
   }, [campagnaSel]);
 
   const handleLogin = (token, user) => setSession({ token, user });
@@ -323,6 +326,7 @@ export default function Campagne() {
                 <CampagneRiepilogo
                   titoli={titoli}
                   prenotato={prenotato}
+                  prenotatoClienti={prenotatoClienti}
                   campagnaLabel={`${campagnaSel.nome} ${campagnaSel.anno}`}
                 />
               )}
