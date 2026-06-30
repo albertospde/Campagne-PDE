@@ -99,7 +99,7 @@ function CanaliMultiSelect({ canaliPresenti, selected, onChange }) {
   );
 }
 
-export default function CampagneRiepilogo({ titoli, prenotato, campagnaLabel }) {
+export default function CampagneRiepilogo({ titoli, prenotato, prenotatoClienti = [], campagnaLabel }) {
   const [search, setSearch] = useState("");
   const [filterEditore, setFilterEditore] = useState("");
   const [canaliVisibili, setCanaliVisibili] = useState([]);
@@ -261,6 +261,23 @@ export default function CampagneRiepilogo({ titoli, prenotato, campagnaLabel }) 
     const ws2 = XLSX.utils.aoa_to_sheet(dashData);
     ws2["!cols"] = [{ wch: 36 }, { wch: 16 }, { wch: 14 }, { wch: 14 }];
     XLSX.utils.book_append_sheet(wb, ws2, "DASHBOARD");
+
+    // ── FOGLIO 3: DETTAGLIO PRENOTATO (per libreria) ───────────────────
+    const eanValidi = new Set(rowsExport.map(r => r.ean)); // rispetta gli EAN esclusi
+    const titoloByEan = Object.fromEntries(rowsExport.map(r => [r.ean, r.titolo]));
+
+    const dettRows = prenotatoClienti
+      .filter(p => eanValidi.has(p.ean))
+      .map(p => [
+        p.nome_cliente, p.codice_cliente, p.ean, titoloByEan[p.ean] || "", CANALI_LABELS[p.canale_codice] || p.canale_codice, p.quantita,
+      ])
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0])) || String(a[2]).localeCompare(String(b[2])));
+
+    const dettHeaders = ["Libreria", "Codice Cliente", "EAN", "Titolo", "Canale", "Quantità"];
+    const dettTotRow = ["", "", "", "", "TOTALE", dettRows.reduce((s, r) => s + r[5], 0)];
+    const ws3 = XLSX.utils.aoa_to_sheet([dettHeaders, ...dettRows, dettTotRow]);
+    ws3["!cols"] = [{ wch: 30 }, { wch: 14 }, { wch: 14 }, { wch: 36 }, { wch: 18 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, ws3, "DETTAGLIO PRENOTATO");
 
     XLSX.writeFile(wb, `RIEPILOGO_${campagnaLabel.replace(/\s+/g, "_")}.xlsx`);
   };
